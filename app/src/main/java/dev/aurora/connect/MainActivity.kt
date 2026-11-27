@@ -33,6 +33,8 @@ class MainActivity : ComponentActivity() {
  @Composable private fun Screen() {
   val scope = rememberCoroutineScope()
   var page by remember { mutableIntStateOf(0) }
+  val preferences = getSharedPreferences("ui", MODE_PRIVATE)
+  var mode by remember { mutableStateOf(runCatching { Mode.valueOf(preferences.getString("mode", "LAN") ?: "LAN") }.getOrDefault(Mode.LAN)) }
   var configured by remember { mutableStateOf(false) }
   var metadata by remember { mutableStateOf("") }
   var busy by remember { mutableStateOf(false) }
@@ -50,7 +52,7 @@ class MainActivity : ComponentActivity() {
   fun connect() {
    scope.launch {
     busy = true
-    try { withContext(Dispatchers.IO) { backend.connect(parseWireGuardConfig(checkNotNull(store.load()))) }; error = "" }
+    try { withContext(Dispatchers.IO) { backend.connect(parseWireGuardConfig(modeConfig(checkNotNull(store.load()), mode))) }; error = "" }
     catch (_: Exception) { error = "Не удалось запустить VPN" }
     finally { busy = false }
    }
@@ -88,6 +90,11 @@ class MainActivity : ComponentActivity() {
     Text("Aurora Connect", style = MaterialTheme.typography.headlineMedium)
     when(page) {
      0 -> {
+      Text("Режим подключения")
+      Mode.entries.forEach { option -> Row { RadioButton(selected = mode == option, enabled = !busy && !snapshot.up, onClick = { mode = option; preferences.edit().putString("mode", option.name).apply() }); Text(when(option) { Mode.LAN -> "LAN"; Mode.FULL -> "Full tunnel"; Mode.SPLIT -> "Split tunnel" }) } }
+      Text("RTT: —")
+      Text("DNS: —")
+      Text(metadata.lineSequence().firstOrNull { it.startsWith("Endpoint:") } ?: "Endpoint: —")
       Text(if(snapshot.up) "Туннель поднят; связность не проверена" else "Отключено")
       Button(enabled = !busy && (configured || snapshot.up), onClick = {
        if(snapshot.up) scope.launch { withContext(Dispatchers.IO) { runCatching { backend.disconnect() } } }
