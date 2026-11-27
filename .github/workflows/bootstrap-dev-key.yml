@@ -38,3 +38,9 @@ jobs:
           git commit -m 'Bootstrap public test-only signing key'
           git push origin HEAD:main
           printf 'Dev certificate SHA256: %s\n' "$(cat android/dev-cert.sha256)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Confirm public key files
+        run: |
+          test -s android/dev-keystore.jks.b64
+          test -s android/dev-cert.sha256
+          printf 'Dev keystore bytes: %s\n' "$(wc -c < android/dev-keystore.jks.b64)" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Dev certificate SHA256: %s\n' "$(cat android/dev-cert.sha256)" >> "$GITHUB_STEP_SUMMARY"
