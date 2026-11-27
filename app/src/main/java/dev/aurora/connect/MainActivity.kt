@@ -115,7 +115,11 @@ class MainActivity : ComponentActivity() {
       Text("Режим подключения")
       Mode.entries.forEach { option -> Row { RadioButton(selected = mode == option, enabled = !busy && !snapshot.up, onClick = { mode = option; preferences.edit().putString("mode", option.name).apply() }); Text(when(option) { Mode.LAN -> "LAN"; Mode.FULL -> "Full tunnel"; Mode.SPLIT -> "Split tunnel" }) } }
       Text("RTT: —")
-      Text("DNS: —")
+      Text(when {
+       !snapshot.up -> "DNS: —"
+       snapshot.dnsServers.isEmpty() -> "DNS туннеля: не задан"
+       else -> "DNS туннеля: ${snapshot.dnsServers.joinToString()}"
+      })
       Text(metadata.lineSequence().firstOrNull { it.startsWith("Endpoint:") } ?: "Endpoint: —")
       Text(if(snapshot.up) "Туннель поднят; связность не проверена" else "Отключено")
       Button(enabled = !busy && (configured || snapshot.up), onClick = {
@@ -137,9 +141,23 @@ class MainActivity : ComponentActivity() {
      else -> {
       Text("Диагностика")
       DevUpdatePanel()
-      Text("Связность, внешний IP, DNS, IPv6: не проверено")
-      Text("RX: ${snapshot.rx}; TX: ${snapshot.tx}")
-      Button(onClick = { clipboard.setPrimaryClip(ClipData.newPlainText("Aurora report", "VPN up: ${snapshot.up}; RX: ${snapshot.rx}; TX: ${snapshot.tx}; connectivity: unverified; $error")) }) { Text("Скопировать отчёт") }
+      Text(if (snapshot.up) "Туннель поднят" else "Туннель отключён")
+      Text(if (snapshot.handshakeEpochMs > 0) "WireGuard: есть handshake" else "WireGuard: handshake пока отсутствует")
+      Text("RX: ${snapshot.rx} Б / TX: ${snapshot.tx} Б")
+      Text("Связность, внешний IP, DNS-запросы и IPv6: не проверены")
+      Button(onClick = {
+       val report = buildString {
+        appendLine("Aurora Connect ${BuildConfig.VERSION_NAME} (сборка ${BuildConfig.VERSION_CODE})")
+        appendLine("Android ${android.os.Build.VERSION.RELEASE}")
+        appendLine("Режим: $mode")
+        appendLine("Туннель поднят: ${snapshot.up}")
+        appendLine("Handshake: ${snapshot.handshakeEpochMs > 0}")
+        appendLine("RX: ${snapshot.rx} Б / TX: ${snapshot.tx} Б")
+        appendLine("DNS-серверов в туннеле: ${snapshot.dnsServers.size}")
+        append("Связность, внешний IP, DNS-запросы и IPv6: не проверены")
+       }
+       clipboard.setPrimaryClip(ClipData.newPlainText("Aurora Connect", report))
+      }) { Text("Скопировать отчёт") }
      }
     }
     if(error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
