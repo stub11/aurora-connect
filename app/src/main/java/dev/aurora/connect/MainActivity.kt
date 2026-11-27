@@ -40,6 +40,13 @@ class MainActivity : ComponentActivity() {
   var metadata by remember { mutableStateOf("") }
   var busy by remember { mutableStateOf(false) }
   var snapshot by remember { mutableStateOf(WireGuardSnapshot(false,0,0,0)) }
+  val handshakeStatus = when (handshakeState(snapshot.up, snapshot.handshakeEpochMs, snapshot.sinceTransmitMs)) {
+   HandshakeState.INACTIVE -> "Туннель отключён"
+   HandshakeState.WAITING_FOR_TRAFFIC -> "Ожидаем исходящий трафик"
+   HandshakeState.WAITING_FOR_HANDSHAKE -> "Ожидаем handshake"
+   HandshakeState.NO_HANDSHAKE -> "Handshake пока не получен"
+   HandshakeState.RECEIVED -> "Handshake получен"
+  }
   var error by remember { mutableStateOf("") }
   var testUrl by remember { mutableStateOf("") }
   var probeBusy by remember(snapshot.up) { mutableStateOf(false) }
@@ -130,7 +137,10 @@ class MainActivity : ComponentActivity() {
        if(snapshot.up) disconnect()
        else { val intent = VpnService.prepare(this@MainActivity); if(intent == null) connect() else consent.launch(intent) }
       }) { Text(if(snapshot.up) "Отключить" else if(configured) "Подключить" else "Нет конфигурации") }
-      Text("Handshake: " + if(snapshot.handshakeEpochMs > 0) java.util.Date(snapshot.handshakeEpochMs).toString() else "—")
+      if (snapshot.up) Text(handshakeStatus)
+      if (snapshot.handshakeEpochMs > 0) {
+       Text("Последний handshake: " + java.util.Date(snapshot.handshakeEpochMs))
+      }
       Text("RX: ${snapshot.rx} Б / TX: ${snapshot.tx} Б")
       Text("Реальный трафик: не проверено")
      }
@@ -146,7 +156,7 @@ class MainActivity : ComponentActivity() {
       Text("Диагностика")
       DevUpdatePanel()
       Text(if (snapshot.up) "Туннель поднят" else "Туннель отключён")
-      Text(if (snapshot.handshakeEpochMs > 0) "WireGuard: есть handshake" else "WireGuard: handshake пока отсутствует")
+      if (snapshot.up) Text("WireGuard: $handshakeStatus")
       Text("RX: ${snapshot.rx} Б / TX: ${snapshot.tx} Б")
       OutlinedTextField(
        value = testUrl,
@@ -188,7 +198,7 @@ class MainActivity : ComponentActivity() {
         appendLine("Android ${android.os.Build.VERSION.RELEASE}")
         appendLine("Режим: $mode")
         appendLine("Туннель поднят: ${snapshot.up}")
-        appendLine("Handshake: ${snapshot.handshakeEpochMs > 0}")
+        appendLine("WireGuard: $handshakeStatus")
         appendLine("RX: ${snapshot.rx} Б / TX: ${snapshot.tx} Б")
         appendLine("DNS-серверов в туннеле: ${snapshot.dnsServers.size}")
         appendLine(probeResult.ifEmpty { "Доступ к тестовому узлу: не проверен" })
