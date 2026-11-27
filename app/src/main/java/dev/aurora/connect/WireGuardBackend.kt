@@ -8,7 +8,14 @@ import com.wireguard.config.Config
 import java.io.ByteArrayInputStream
 
 // Call on a worker thread, only after explicit VPN consent.
-class WireGuardBackend(private val context: Context) {
+class WireGuardBackend private constructor(private val context: Context) {
+ companion object {
+  private var instance: WireGuardBackend? = null
+
+  @Synchronized fun getInstance(context: Context): WireGuardBackend =
+   instance ?: WireGuardBackend(context.applicationContext).also { instance = it }
+ }
+
  private val backend = GoBackend(context.applicationContext)
  private val tunnel = object : Tunnel {
   override fun getName() = "aurora"
