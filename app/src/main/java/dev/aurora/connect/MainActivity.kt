@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +41,9 @@ class MainActivity : ComponentActivity() {
   var busy by remember { mutableStateOf(false) }
   var snapshot by remember { mutableStateOf(WireGuardSnapshot(false,0,0,0)) }
   var error by remember { mutableStateOf("") }
+  var testUrl by remember { mutableStateOf("") }
+  var probeBusy by remember(snapshot.up) { mutableStateOf(false) }
+  var probeResult by remember(snapshot.up) { mutableStateOf("") }
   val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
   fun importText(text: String) {
    scope.launch {
@@ -144,7 +148,40 @@ class MainActivity : ComponentActivity() {
       Text(if (snapshot.up) "Туннель поднят" else "Туннель отключён")
       Text(if (snapshot.handshakeEpochMs > 0) "WireGuard: есть handshake" else "WireGuard: handshake пока отсутствует")
       Text("RX: ${snapshot.rx} Б / TX: ${snapshot.tx} Б")
-      Text("Связность, внешний IP, DNS-запросы и IPv6: не проверены")
+      OutlinedTextField(
+       value = testUrl,
+       onValueChange = { testUrl = it; probeResult = "" },
+       label = { Text("HTTPS-адрес своего тестового узла") },
+       supportingText = { Text("Укажи IP в URL. Сертификат должен действовать для этого IP, ответ — HTTP 204.") },
+       enabled = !probeBusy,
+       singleLine = true,
+       modifier = Modifier.fillMaxWidth()
+      )
+      Button(enabled = snapshot.up && !busy && !probeBusy && testUrl.isNotBlank(), onClick = {
+       val address = testUrl
+       scope.launch {
+        probeBusy = true
+        probeResult = ""
+        try {
+         val evidence = withContext(Dispatchers.IO) { checkVpnEndpoint(applicationContext, address) }
+         probeResult = when {
+          evidence.verified -> "Тестовый узел доступен через VPN. HTTPS: ${evidence.rttMs} мс"
+          !evidence.vpnBound -> "VPN-сеть изменилась во время проверки"
+          else -> "Узел вернул ответ, отличный от HTTP 204"
+         }
+        } catch (e: CancellationException) {
+         throw e
+        } catch (e: ProbeRejected) {
+         probeResult = e.notice
+        } catch (_: Exception) {
+         probeResult = "Не удалось получить HTTPS-ответ через VPN"
+        } finally {
+         probeBusy = false
+        }
+       }
+      }) { Text(if (probeBusy) "Проверяем…" else "Проверить доступ через VPN") }
+      if (probeResult.isNotEmpty()) Text(probeResult)
+      Text("Внешний IP, DNS-запросы и IPv6: не проверены")
       Button(onClick = {
        val report = buildString {
         appendLine("Aurora Connect ${BuildConfig.VERSION_NAME} (сборка ${BuildConfig.VERSION_CODE})")
@@ -154,7 +191,8 @@ class MainActivity : ComponentActivity() {
         appendLine("Handshake: ${snapshot.handshakeEpochMs > 0}")
         appendLine("RX: ${snapshot.rx} Б / TX: ${snapshot.tx} Б")
         appendLine("DNS-серверов в туннеле: ${snapshot.dnsServers.size}")
-        append("Связность, внешний IP, DNS-запросы и IPv6: не проверены")
+        appendLine(probeResult.ifEmpty { "Доступ к тестовому узлу: не проверен" })
+        append("Внешний IP, DNS-запросы и IPv6: не проверены")
        }
        clipboard.setPrimaryClip(ClipData.newPlainText("Aurora Connect", report))
       }) { Text("Скопировать отчёт") }
