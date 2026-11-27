@@ -1,0 +1,42 @@
+name: Bootstrap stages
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['docs/ROADMAP.md', '.github/workflows/bootstrap.yml']
+permissions:
+  issues: write
+  contents: read
+concurrency: bootstrap-stages
+jobs:
+  bootstrap:
+    if: github.repository == 'stub11/aurora-connect' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: stub11/aurora-connect
+    steps:
+      - name: Ensure stages and issues
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in 0 1 2 3 4 5; do
+            title="Stage $n"
+            id=$(gh api --paginate "repos/$GH_REPO/milestones?state=all&per_page=100" --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+            if [ -z "$id" ]; then
+              id=$(gh api --method POST "repos/$GH_REPO/milestones" -f title="$title" --jq .number)
+            fi
+            task="Stage $n: acceptance checklist"
+            existing=$(gh api --paginate "repos/$GH_REPO/issues?state=all&per_page=100" --jq ".[] | select(.pull_request == null and .title == \"$task\") | .number" | head -n 1)
+            if [ -z "$existing" ]; then
+              existing=$(gh api --method POST "repos/$GH_REPO/issues" -f title="$task" -f body="See docs/ROADMAP.md. Evidence required before acceptance." -F milestone="$id" --jq .number)
+            fi
+            echo "Stage $n: milestone $id, issue #$existing" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Report outcome
+        if: always()
+        env:
+          OUTCOME: ${{ job.status }}
+        run: |
+          printf 'Bootstrap: %s\n' "$OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          gh issue comment 3 --body "Bootstrap: $OUTCOME. https://github.com/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
