@@ -9,6 +9,7 @@ fun modeConfig(text: String, mode: Mode): String {
  }
  if (mode == Mode.FULL) {
   require(config.peers.size == 1)
+  require(config.peers.single().allowedIps.isNotEmpty())
   require(config.`interface`.dnsServers.isNotEmpty())
   return text.lineSequence().map { line ->
    if (line.substringBefore('=').trim().equals("AllowedIPs", true)) "AllowedIPs = 0.0.0.0/0, ::/0" else line
