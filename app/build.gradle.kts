@@ -8,6 +8,7 @@ android {
  kotlinOptions { jvmTarget = "17" }
 }
 dependencies {
+ implementation("com.journeyapps:zxing-android-embedded:4.3.0")
  implementation(platform(libs.compose.bom))
  implementation(libs.material3)
  implementation(libs.activity)
