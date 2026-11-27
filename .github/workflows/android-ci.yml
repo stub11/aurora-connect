@@ -36,10 +36,52 @@ jobs:
             test "$actual" = "$(cat android/dev-cert.sha256)"
             printf 'Certificate SHA256: %s\n' "$actual" >> "$GITHUB_STEP_SUMMARY"
           done
+      - name: Prepare dev release assets
+        run: |
+          set -euo pipefail
+          mkdir -p build/dev-release
+          apk=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" > build/dev-release-badging.txt
+          python - "$apk" <<'PY'
+          import datetime
+          import hashlib
+          import json
+          import os
+          import re
+          import shutil
+          import sys
+          from pathlib import Path
+
+          package = Path("build/dev-release-badging.txt").read_text().splitlines()[0]
+          match = re.match(r"package: name='[^']+' versionCode='([0-9]+)' versionName='([^']+)'", package)
+          expected_code = int(os.environ["GITHUB_RUN_NUMBER"])
+          expected_name = "0.1.0-" + os.environ["GITHUB_SHA"][:8]
+          if match is None or (int(match[1]), match[2]) != (expected_code, expected_name):
+              raise SystemExit("APK version does not match this CI run")
+
+          assets = Path("build/dev-release")
+          apk = assets / f"aurora-connect-{match[2]}.apk"
+          shutil.copyfile(sys.argv[1], apk)
+          with apk.open("rb") as stream:
+              digest = hashlib.file_digest(stream, "sha256").hexdigest()
+          (assets / "SHA256").write_text(f"{digest}  {apk.name}\n")
+          manifest = {
+              "versionCode": int(match[1]),
+              "versionName": match[2],
+              "file": apk.name,
+              "sha256": digest,
+              "size": apk.stat().st_size,
+              "date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "notes": "Тестовая сборка Aurora Connect",
+          }
+          (assets / "update.json").write_text(
+              json.dumps(manifest, ensure_ascii=False) + "\n", encoding="utf-8"
+          )
+          PY
       - uses: actions/upload-artifact@v5
         with:
-          name: aurora-debug-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: aurora-dev-release
+          path: build/dev-release/
           if-no-files-found: error
       - name: Scan secrets
         run: docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.24.2 git /repo --redact
@@ -52,21 +94,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v5
         with:
-          name: aurora-debug-apk
+          name: aurora-dev-release
       - name: Publish prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          export VERSION_NAME="0.1.0-${GITHUB_SHA:0:8}"
-          export APK="aurora-connect-$VERSION_NAME.apk"
-          mv app-release.apk "$APK"
-          sha256sum "$APK" > SHA256
-          python - <<'PY'
-          import os, json, hashlib, datetime
-          p=os.environ['APK']
-          with open(p,'rb') as f: digest=hashlib.file_digest(f,'sha256').hexdigest()
-          with open('update.json','w') as f:
-              json.dump(dict(versionCode=int(os.environ['GITHUB_RUN_NUMBER']),versionName=os.environ['VERSION_NAME'],file=p,sha256=digest,size=os.path.getsize(p),date=datetime.datetime.now(datetime.timezone.utc).isoformat(),notes='Тестовая сборка Aurora Connect'),f,ensure_ascii=False)
-          PY
+          VERSION_NAME="0.1.0-${GITHUB_SHA:0:8}"
+          APK="aurora-connect-$VERSION_NAME.apk"
+          sha256sum --check SHA256
           gh release create "dev-$GITHUB_RUN_NUMBER" "$APK" SHA256 update.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Dev $VERSION_NAME" --notes "Тестовая сборка. Не импортируйте реальный конфиг."
