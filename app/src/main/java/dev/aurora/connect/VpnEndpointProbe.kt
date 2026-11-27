@@ -36,6 +36,7 @@ internal fun checkVpnEndpoint(context: Context, text: String): ConnectivityEvide
         throw ProbeRejected("Укажи IP-адрес тестового узла в ссылке HTTPS")
     }
     val manager = context.getSystemService(ConnectivityManager::class.java)
+        ?: throw ProbeRejected("Служба проверки сети Android недоступна")
     val vpn = manager.activeNetwork
         ?: throw ProbeRejected("Активная VPN-сеть Aurora Connect недоступна")
     fun currentVpn(network: Network): Boolean {
@@ -46,7 +47,7 @@ internal fun checkVpnEndpoint(context: Context, text: String): ConnectivityEvide
     }
     if (!currentVpn(vpn)) throw ProbeRejected("Активная VPN-сеть Aurora Connect недоступна")
     val routes = manager.getLinkProperties(vpn)?.routes.orEmpty()
-    if (routes.none { it.matches(target) }) {
+    if (routes.none { it.destination.contains(target) }) {
         throw ProbeRejected("До этого IP нет маршрута в VPN")
     }
 
