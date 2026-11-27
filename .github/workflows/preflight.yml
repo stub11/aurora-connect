@@ -1,0 +1,29 @@
+name: Preflight CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y busybox
+          busybox sh -n router/preflight.sh
+          busybox sh router/preflight.sh > report.txt
+          grep -q '^END$' report.txt
+          grep -q '^ABI=' report.txt
+          grep -q '^doqd_process=' report.txt
+          ! grep -Eq '^((WAN|DNS|IP|MAC|KEY|TOKEN)=)' report.txt
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: |
+          docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.24.3 git /repo --redact --no-banner
