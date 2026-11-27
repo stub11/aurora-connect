@@ -4,3 +4,5 @@
 2026-11-27: Android skeleton implemented on feature/android-skeleton, refs #9. CI and APK pending. Milestones evidence unavailable; connector cannot create milestones or dispatch workflows. No physical tests.
 
 2026-11-27: PR #14 merged (0eded271). Android CI lint/unit/assembleDebug/upload/gitleaks success: https://github.com/stub11/aurora-connect/actions/runs/45967088420 ; APK artifact aurora-debug-apk: https://github.com/stub11/aurora-connect/actions/runs/45967088420#artifacts . Bootstrap success: https://github.com/stub11/aurora-connect/issues/3#issuecomment-7213683171 . Stage 1 backend foundation refs #15; UI import, bound endpoint probe, retry orchestration and physical tests pending.
+
+PR #20 merged: 7a19ab33877a884d4b6f831e8a546ff1a73f7a81. Android CI success: https://github.com/stub11/aurora-connect/actions/runs/45971382577 ; APK: https://github.com/stub11/aurora-connect/actions/runs/45971382577#artifacts. Physical routing and IPv6 leak tests pending.
