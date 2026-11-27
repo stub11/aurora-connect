@@ -29,7 +29,7 @@ jobs:
           fi
           mkdir -p android
           key="$RUNNER_TEMP/aurora-dev.jks"
-          keytool -genkeypair -storetype JKS -keystore "$key" -keyalg RSA -keysize 3072 -validity 10958 -alias aurora-dev -storepass aurora-dev-public -keypass aurora-dev-public -dname 'CN=Aurora Dev, O=Aurora Connect (dev, public key)'
+          keytool -genkeypair -storetype JKS -keystore "$key" -keyalg RSA -keysize 3072 -validity 10958 -alias aurora-dev -storepass aurora-dev-public -keypass aurora-dev-public -dname 'CN=Aurora Dev, O=Aurora Connect dev public key'
           base64 -w0 "$key" > android/dev-keystore.jks.b64
           keytool -exportcert -alias aurora-dev -keystore "$key" -storepass aurora-dev-public | sha256sum | cut -d' ' -f1 > android/dev-cert.sha256
           git config user.name aurora-bot
