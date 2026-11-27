@@ -1,0 +1,3 @@
+# Agent instructions
+
+Read SPEC.md, ROADMAP.md, SECURITY.md and docs/research.md before changes. Check Issues, PRs and CI. Continue existing work, use separate branches, avoid overwriting concurrent changes. Work autonomously, retry recoverable failures up to three times. No paid resources without approval. Local work only under D:\AI or U:\AI work. Never publish secrets, personal addresses or private CM code. Do not modify real router configuration without safe preflight and rollback. Publish verified releases autonomously; label experimental artifacts. Report actual tests and blockers, never invent PASS. Keep Cudy Monitor Pro and CM Aurora independent.
