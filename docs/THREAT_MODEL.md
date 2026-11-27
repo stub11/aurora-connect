@@ -1,2 +1,4 @@
 # Threat model
 Assets: device keys, LAN access, DNS, gateway availability. Threats: stolen phone, malicious QR, hostile Wi-Fi, relay compromise, DNS/IPv6 leaks, installer lockout, CI secret exposure. Controls: per-device keys, Keystore-backed encryption, explicit VPN consent, validated configs, authenticated WireGuard, trusted relay only, revoke peers, fail closed full tunnel, no secret logs, scoped firewall rules and commit-confirmed rollback. Telegram must not transmit private keys; authorize owner and use local QR enrollment. All controls NOT VERIFIED until tests. No router writes without explicit approval.
+
+Public dev signing key: anyone can forge dev APKs. Never import real configurations into dev builds. Production requires a separate private key.

@@ -1,0 +1,5 @@
+[extend]
+useDefault = true
+[[allowlists]]
+description = "Public test-only signing key"
+paths = ['''^android/dev-keystore\.jks\.b64$''']
