@@ -1,5 +1,6 @@
 package dev.aurora.connect
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
@@ -28,6 +29,8 @@ internal data class DevRelease(
     val size: Long,
     val sha256: String,
 )
+
+internal class UpdateFailure(val messageId: String) : Exception(messageId)
 
 internal class DevUpdater(private val context: Context) {
     private val manager = context.packageManager
@@ -60,7 +63,11 @@ internal class DevUpdater(private val context: Context) {
         Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
 
     @Suppress("DEPRECATION")
-    fun prepareInstaller(release: DevRelease): Intent {
+    suspend fun prepareInstaller(
+        release: DevRelease,
+        onDownload: suspend (Int) -> Unit,
+        onVerify: suspend () -> Unit,
+    ): Intent {
         val local = installed()
         require(isDevSigned(local) && release.versionCode > local.longVersionCode)
 
@@ -70,9 +77,12 @@ internal class DevUpdater(private val context: Context) {
         directory.listFiles()?.filter { it.lastModified() < cutoff }?.forEach { it.delete() }
         val apk = File.createTempFile("aurora-", ".apk", directory)
         var ready = false
+        var stage = "Скачивание APK"
         try {
             val digest = MessageDigest.getInstance("SHA-256")
             var size = 0L
+            var percentage = 0
+            onDownload(percentage)
             open(release.url) { input ->
                 apk.outputStream().use { output ->
                     val buffer = ByteArray(32 * 1024)
@@ -83,10 +93,18 @@ internal class DevUpdater(private val context: Context) {
                         require(size <= release.size)
                         digest.update(buffer, 0, count)
                         output.write(buffer, 0, count)
+                        val current = (size * 100 / release.size).toInt()
+                        if (current != percentage) {
+                            percentage = current
+                            onDownload(current)
+                        }
                     }
                 }
             }
+            stage = "Проверка контрольной суммы APK"
+            onVerify()
             require(size == release.size && digest.digest().hex() == release.sha256)
+            stage = "Проверка пакета и подписи APK"
             val archive = requireNotNull(
                 manager.getPackageArchiveInfo(apk.path, PackageManager.GET_SIGNING_CERTIFICATES)
             )
@@ -94,12 +112,18 @@ internal class DevUpdater(private val context: Context) {
                 archive.longVersionCode == release.versionCode &&
                 archive.versionName == release.versionName &&
                 isDevSigned(archive))
+            stage = "Подготовка установщика Android"
             val uri = FileProvider.getUriForFile(context, "$packageName.updates", apk)
-            val installer = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, "application/vnd.android.package-archive")
+            @Suppress("DEPRECATION")
+            val installer = Intent(Intent.ACTION_INSTALL_PACKAGE, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .apply { clipData = ClipData.newRawUri("Aurora Connect APK", uri) }
             ready = true
             return installer
+        } catch (e: java.util.concurrent.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            throw UpdateFailure(stage)
         } finally {
             if (!ready) apk.delete()
         }
@@ -137,17 +161,19 @@ internal fun newestDevRelease(releases: JSONArray, installedCode: Long): DevRele
 
 private fun ByteArray.hex(): String = joinToString("") { "%02x".format(it) }
 
-private fun <T> open(address: String, consume: (InputStream) -> T): T {
+private inline fun <T> open(address: String, consume: (InputStream) -> T): T {
     var url = URL(address)
     repeat(5) {
         require(url.protocol == "https" && url.userInfo == null &&
             (url.port == -1 || url.port == 443) &&
-            url.host in setOf("api.github.com", "github.com", "release-assets.githubusercontent.com"))
+            url.host in setOf("api.github.com", "github.com",
+                "release-assets.githubusercontent.com", "objects.githubusercontent.com"))
         val connection = url.openConnection() as HttpsURLConnection
         try {
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 15_000
             connection.readTimeout = 20_000
+            connection.setRequestProperty("Accept-Encoding", "identity")
             if (url.host == "api.github.com") {
                 connection.setRequestProperty("Accept", "application/vnd.github+json")
             }
