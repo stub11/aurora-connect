@@ -18,7 +18,7 @@ internal fun DevUpdatePanel() {
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
 
-    Text("Тестовая версия ${BuildConfig.VERSION_NAME}")
+    Text("Тестовая версия ${BuildConfig.VERSION_NAME} · сборка ${BuildConfig.VERSION_CODE}")
     Button(enabled = !busy, onClick = {
         scope.launch {
             busy = true
@@ -28,7 +28,7 @@ internal fun DevUpdatePanel() {
                 val available = withContext(Dispatchers.IO) { updater.check() }
                 release = available
                 status = if (available == null) "Новых тестовых сборок нет"
-                    else "Доступна версия ${available.versionName}"
+                    else "Доступна тестовая сборка ${available.versionCode} (${available.versionName})"
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
