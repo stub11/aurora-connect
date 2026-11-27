@@ -1,0 +1,14 @@
+[versions]
+agp = "8.9.2"
+kotlin = "2.1.20"
+compose = "2025.04.01"
+[libraries]
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose" }
+material3 = { module = "androidx.compose.material3:material3" }
+activity = { module = "androidx.activity:activity-compose", version = "1.10.1" }
+wireguard = { module = "com.wireguard.android:tunnel", version = "1.0.20230706" }
+junit = { module = "junit:junit", version = "4.13.2" }
+[plugins]
+android = { id = "com.android.application", version.ref = "agp" }
+kotlin = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
