@@ -25,7 +25,7 @@ jobs:
         run: |
           mkdir -p build
           base64 -d android/dev-keystore.jks.b64 > build/aurora-dev.jks
-      - run: gradle :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease --no-daemon
+      - run: gradle :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:cyclonedxDirectBom --no-daemon
       - name: Verify APK certificate
         run: |
           set -euo pipefail
@@ -59,12 +59,24 @@ jobs:
           if match is None or (int(match[1]), match[2]) != (expected_code, expected_name):
               raise SystemExit("APK version does not match this CI run")
 
+          sbom = Path("app/build/reports/cyclonedx-direct/bom.json")
+          bom = json.loads(sbom.read_text(encoding="utf-8"))
+          components = {(item.get("group"), item["name"]) for item in bom["components"]}
+          if (bom["bomFormat"] != "CycloneDX"
+                  or bom["metadata"]["component"]["version"] != match[2]
+                  or ("com.wireguard.android", "tunnel") not in components):
+              raise SystemExit("SBOM does not describe the APK in this CI run")
+
           assets = Path("build/dev-release")
+          shutil.copyfile(sbom, assets / "sbom.cdx.json")
           apk = assets / f"aurora-connect-{match[2]}.apk"
           shutil.copyfile(sys.argv[1], apk)
           with apk.open("rb") as stream:
               digest = hashlib.file_digest(stream, "sha256").hexdigest()
-          (assets / "SHA256").write_text(f"{digest}  {apk.name}\n")
+          sbom_digest = hashlib.sha256(sbom.read_bytes()).hexdigest()
+          (assets / "SHA256").write_text(
+              f"{digest}  {apk.name}\n{sbom_digest}  sbom.cdx.json\n"
+          )
           manifest = {
               "versionCode": int(match[1]),
               "versionName": match[2],
@@ -103,4 +115,4 @@ jobs:
           VERSION_NAME="0.1.0-${GITHUB_SHA:0:8}"
           APK="aurora-connect-$VERSION_NAME.apk"
           sha256sum --check SHA256
-          gh release create "dev-$GITHUB_RUN_NUMBER" "$APK" SHA256 update.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Dev $VERSION_NAME" --notes "Тестовая сборка. Не импортируйте реальный конфиг."
+          gh release create "dev-$GITHUB_RUN_NUMBER" "$APK" SHA256 update.json sbom.cdx.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Dev $VERSION_NAME" --notes "Тестовая сборка. Не импортируйте реальный конфиг."
