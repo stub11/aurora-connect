@@ -7,6 +7,12 @@ case "$mode" in
  *) echo 'Usage: wg-setup.sh [--dry-run|--apply]' >&2; exit 2 ;;
 esac
 echo 'Aurora WireGuard setup plan (read-only)'
+bridge_dir=$(dirname "$0")/remote-bridge
+if [ -r "$bridge_dir/preflight.sh" ]; then
+ sh "$bridge_dir/preflight.sh" || :
+else
+ echo 'TELEGRAM_FROM_ROUTER: FAIL (probe missing)'
+fi
 for c in wg ip wireguard-go qrencode; do
  if command -v "$c" >/dev/null 2>&1; then echo "$c: available"; else echo "$c: unavailable"; fi
 done
