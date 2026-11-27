@@ -1,6 +1,8 @@
 package dev.aurora.connect
 
 import android.os.Bundle
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import android.net.VpnService
 import android.content.ClipboardManager
 import android.content.ClipData
@@ -32,6 +34,7 @@ class MainActivity : ComponentActivity() {
   val scope = rememberCoroutineScope()
   var page by remember { mutableIntStateOf(0) }
   var configured by remember { mutableStateOf(false) }
+  var metadata by remember { mutableStateOf("") }
   var busy by remember { mutableStateOf(false) }
   var snapshot by remember { mutableStateOf(WireGuardSnapshot(false,0,0,0)) }
   var error by remember { mutableStateOf("") }
@@ -39,7 +42,7 @@ class MainActivity : ComponentActivity() {
   fun importText(text: String) {
    scope.launch {
     busy = true
-    try { withContext(Dispatchers.IO) { store.save(text) }; configured = true; error = "" }
+    try { withContext(Dispatchers.IO) { store.save(text); configMetadata(text) }.also { metadata = it }; configured = true; error = "" }
     catch (_: Exception) { error = "Не удалось импортировать конфигурацию" }
     finally { busy = false }
    }
@@ -52,6 +55,7 @@ class MainActivity : ComponentActivity() {
     finally { busy = false }
    }
   }
+  val scanner = rememberLauncherForActivityResult(ScanContract()) { result -> result.contents?.let { importText(it) } }
   val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
    if (result.resultCode == RESULT_OK) connect() else error = "Разрешение VPN не предоставлено"
   }
@@ -68,7 +72,8 @@ class MainActivity : ComponentActivity() {
    }
   }
   LaunchedEffect(Unit) {
-   configured = withContext(Dispatchers.IO) { runCatching { store.load() != null }.getOrDefault(false) }
+   metadata = withContext(Dispatchers.IO) { runCatching { store.load()?.let(::configMetadata).orEmpty() }.getOrDefault("") }
+   configured = metadata.isNotEmpty()
    while (true) {
     snapshot = withContext(Dispatchers.IO) { runCatching { backend.snapshot() }.getOrDefault(WireGuardSnapshot(false,0,0,0)) }
     delay(2000)
@@ -97,7 +102,8 @@ class MainActivity : ComponentActivity() {
       Text(if(configured) "Конфигурация сохранена в зашифрованном виде" else "Нет конфигурации")
       Button(enabled = !busy && !snapshot.up, onClick = { clipboard.primaryClip?.getItemAt(0)?.text?.toString()?.let { importText(it) } }) { Text("Вставить из буфера") }
       Button(enabled = !busy && !snapshot.up, onClick = { file.launch(arrayOf("*/*")) }) { Text("Импорт из файла") }
-      Text("Сканирование QR: в разработке")
+      Button(enabled = !busy && !snapshot.up, onClick = { scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Сканируйте конфигурацию WireGuard").setBeepEnabled(false)) }) { Text("Сканировать QR") }
+      if (configured) Text(metadata)
      }
      else -> {
       Text("Диагностика")
