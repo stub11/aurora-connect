@@ -1,40 +1,11 @@
-name: API bootstrap
+name: Legacy runner check
 on:
-  push:
-    branches: [main, feature/api-bootstrap]
-    paths: ['.github/workflows/api-bootstrap.yml']
   pull_request:
     branches: [main]
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - name: Check runner tooling
-        run: gh --version
-  milestones:
-    if: github.event_name != 'pull_request' && github.repository == 'stub11/aurora-connect' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      GH_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
-      GH_REPO: stub11/aurora-connect
-    steps:
-      - name: Verify API and create missing milestones
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$GH_TOKEN"
-          gh api "repos/$GH_REPO" --jq .full_name
-          gh api "repos/$GH_REPO/actions/workflows" --jq .total_count
-          for stage in 0 1 2 3 4 5; do
-            title="Stage $stage"
-            existing=$(gh api --paginate "repos/$GH_REPO/milestones?state=all&per_page=100" --jq '.[].title')
-            if ! grep -Fxq "$title" <<< "$existing"; then
-              gh api --method POST "repos/$GH_REPO/milestones" -f title="$title" --jq .title
-            fi
-          done
-          gh api --paginate "repos/$GH_REPO/milestones?state=all&per_page=100" --jq '.[] | {number,title}'
+      - run: gh --version
