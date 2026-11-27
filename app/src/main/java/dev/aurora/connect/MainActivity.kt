@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
- private val backend by lazy { WireGuardBackend(applicationContext) }
+ private val backend by lazy { WireGuardBackend.getInstance(applicationContext) }
  private val store by lazy { EncryptedConfigStore(applicationContext) }
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
@@ -52,9 +52,31 @@ class MainActivity : ComponentActivity() {
   fun connect() {
    scope.launch {
     busy = true
-    try { withContext(Dispatchers.IO) { backend.connect(parseWireGuardConfig(modeConfig(checkNotNull(store.load()), mode))) }; error = "" }
+    try {
+     snapshot = withContext(Dispatchers.IO) {
+      backend.connect(parseWireGuardConfig(modeConfig(checkNotNull(store.load()), mode)))
+      backend.snapshot()
+     }
+     error = ""
+    }
     catch (_: Exception) { error = "Не удалось запустить VPN" }
     finally { busy = false }
+   }
+  }
+  fun disconnect() {
+   scope.launch {
+    busy = true
+    try {
+     snapshot = withContext(Dispatchers.IO) {
+      backend.disconnect()
+      backend.snapshot()
+     }
+     error = ""
+    } catch (_: Exception) {
+     error = "Не удалось остановить VPN"
+    } finally {
+     busy = false
+    }
    }
   }
   val scanner = rememberLauncherForActivityResult(ScanContract()) { result -> result.contents?.let { importText(it) } }
@@ -97,7 +119,7 @@ class MainActivity : ComponentActivity() {
       Text(metadata.lineSequence().firstOrNull { it.startsWith("Endpoint:") } ?: "Endpoint: —")
       Text(if(snapshot.up) "Туннель поднят; связность не проверена" else "Отключено")
       Button(enabled = !busy && (configured || snapshot.up), onClick = {
-       if(snapshot.up) scope.launch { withContext(Dispatchers.IO) { runCatching { backend.disconnect() } } }
+       if(snapshot.up) disconnect()
        else { val intent = VpnService.prepare(this@MainActivity); if(intent == null) connect() else consent.launch(intent) }
       }) { Text(if(snapshot.up) "Отключить" else if(configured) "Подключить" else "Нет конфигурации") }
       Text("Handshake: " + if(snapshot.handshakeEpochMs > 0) java.util.Date(snapshot.handshakeEpochMs).toString() else "—")
