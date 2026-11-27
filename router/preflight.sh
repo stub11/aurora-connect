@@ -1,16 +1,21 @@
 #!/bin/sh
 # Read-only; no files created, no modules loaded.
+set -f
+
 echo '=== Aurora preflight ==='
 uname -m
 uname -r
 [ -c /dev/net/tun ] && echo TUN_PRESENT || echo TUN_NOT_FOUND
-command -v wg || :
-grep -i wireguard /proc/modules 2>/dev/null || :
+if command -v wg >/dev/null 2>&1; then echo 'wg: available'; fi
+if grep -q '^wireguard ' /proc/modules 2>/dev/null; then echo 'WireGuard module: loaded'; fi
 if [ -r /proc/config.gz ]; then
  zcat /proc/config.gz | grep -E '^CONFIG_(WIREGUARD|TUN)=' || :
 fi
 for d in /lib/modules /opt/lib/modules; do
- [ ! -d "$d" ] || find "$d" -name '*wireguard*' 2>/dev/null
+ if [ -d "$d" ] && find "$d" -name 'wireguard.ko*' 2>/dev/null | grep -q .; then
+  echo 'WireGuard module file: present'
+  break
+ fi
 done
 echo '=== WAN ==='
 # Inspect all default-route interfaces; never print address or gateway.
@@ -34,21 +39,28 @@ v6=$(ip -6 route show default 2>/dev/null) && {
 } || echo 'IPv6 default route: UNKNOWN'
 echo '=== Keenetic ==='
 if command -v ndmc >/dev/null 2>&1; then
- ndmc -c 'show version' 2>/dev/null | awk '/^[[:space:]]*(release|version|ndm|title|arch):[[:space:]]*/ {if ($2 ~ /^[A-Za-z0-9._-]+$/ && NF==2) print $1,$2}'
- ndmc -c 'show components' 2>/dev/null | awk '/^[[:space:]]*(name|id|version|installed):[[:space:]]*/ {if ($2 ~ /^[A-Za-z0-9._-]+$/ && NF==2) print $1,$2}'
+ ndmc -c 'show version' 2>/dev/null | awk '
+  /^[[:space:]]*(release|version|ndm):[[:space:]]*/ && NF == 2 &&
+  $2 ~ /^[0-9]+([.][0-9]+)+([-_][A-Za-z0-9]+)*$/ && length($2) <= 40 {print $1, $2}'
+ if ndmc -c 'show components' 2>/dev/null | awk '
+  /^[[:space:]]*(name|id):[[:space:]]*/ && NF == 2 && tolower($2) == "wireguard" {found = 1}
+  END {exit !found}'; then
+  echo 'Keenetic WireGuard component: listed'
+ fi
  echo 'Keenetic component output may be incomplete on this firmware.'
 else echo 'ndmc: unavailable'; fi
 echo '=== DNS ==='
 netstat -ln 2>/dev/null | awk '$4 ~ /:(53|5354)$/ {print $1, "DNS listener"}'
 echo '=== Firewall ==='
-for c in iptables ip6tables nft; do command -v "$c" || :; done
+for c in iptables ip6tables nft; do
+ if command -v "$c" >/dev/null 2>&1; then echo "$c: available"; fi
+done
 echo '=== RAM / storage ==='
 grep -E '^(MemTotal|MemAvailable|MemFree|SwapTotal|SwapFree):' /proc/meminfo
-df -k /opt
+df -Pk /opt 2>/dev/null | awk 'NR == 2 && $(NF-2) ~ /^[0-9]+$/ {print "opt available KiB:", $(NF-2)}'
 awk '$2=="/opt" {print "opt mounted:",$3}' /proc/mounts
 if command -v opkg >/dev/null 2>&1; then
- opkg --version
- opkg print-architecture
+ echo 'opkg: available'
 fi
 echo '=== Services ==='
 for c in doqd d2k; do if pidof "$c" >/dev/null 2>&1; then echo "$c running"; else echo "$c process not detected"; fi; done
