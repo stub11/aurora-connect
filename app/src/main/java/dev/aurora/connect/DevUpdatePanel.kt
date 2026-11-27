@@ -1,5 +1,7 @@
 package dev.aurora.connect
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -67,7 +69,14 @@ internal fun DevUpdatePanel() {
                                 },
                             )
                         }
-                        context.startActivity(installer)
+                        try {
+                            context.startActivity(installer)
+                        } catch (_: ActivityNotFoundException) {
+                            val fallback = Intent(installer)
+                                .setAction(Intent.ACTION_VIEW)
+                                .setDataAndType(installer.data, "application/vnd.android.package-archive")
+                            context.startActivity(fallback)
+                        }
                         status = "Подтвердите обновление. Ход установки покажет Android."
                     } else {
                         context.startActivity(updater.installSettings())
