@@ -137,7 +137,7 @@ class MainActivity : ComponentActivity() {
        if(snapshot.up) disconnect()
        else { val intent = VpnService.prepare(this@MainActivity); if(intent == null) connect() else consent.launch(intent) }
       }) { Text(if(snapshot.up) "Отключить" else if(configured) "Подключить" else "Нет конфигурации") }
-      Text(handshakeStatus)
+      if (snapshot.up) Text(handshakeStatus)
       if (snapshot.handshakeEpochMs > 0) {
        Text("Последний handshake: " + java.util.Date(snapshot.handshakeEpochMs))
       }
