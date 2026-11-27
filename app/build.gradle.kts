@@ -41,6 +41,7 @@ dependencies {
  implementation(libs.activity)
  implementation(libs.wireguard)
  testImplementation(libs.junit)
+ testImplementation("org.json:json:20250107")
 }
 
 tasks.named<CyclonedxDirectTask>("cyclonedxDirectBom") {
