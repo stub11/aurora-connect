@@ -2,6 +2,13 @@ package dev.aurora.connect
 import org.junit.Assert.*
 import org.junit.Test
 class ConnectionEvidenceTest {
+ @Test fun handshakeWaitStartsOnlyAfterTransmitAndRecoveryOverridesWait() {
+  assertEquals(HandshakeState.INACTIVE, handshakeState(false, 100, 25_000))
+  assertEquals(HandshakeState.WAITING_FOR_TRAFFIC, handshakeState(true, 0, null))
+  assertEquals(HandshakeState.WAITING_FOR_HANDSHAKE, handshakeState(true, 0, 19_999))
+  assertEquals(HandshakeState.NO_HANDSHAKE, handshakeState(true, 0, 20_000))
+  assertEquals(HandshakeState.RECEIVED, handshakeState(true, 100, 25_000))
+ }
  @Test fun probeRequiresHttpsWithoutCredentialsOrParameters() {
   assertEquals("192.0.2.4", parseProbeUri("https://192.0.2.4/health").host)
   assertEquals("[2001:db8::3]", parseProbeUri("https://[2001:db8::3]/health").host)
