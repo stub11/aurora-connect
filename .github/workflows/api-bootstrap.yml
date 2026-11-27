@@ -3,12 +3,20 @@ on:
   push:
     branches: [feature/api-bootstrap]
     paths: ['.github/workflows/api-bootstrap.yml']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check runner tooling
+        run: gh --version
   milestones:
-    if: github.repository == 'stub11/aurora-connect' && (github.ref == 'refs/heads/feature/api-bootstrap' || github.ref == 'refs/heads/main')
+    if: github.event_name != 'pull_request' && github.repository == 'stub11/aurora-connect' && (github.ref == 'refs/heads/feature/api-bootstrap' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
