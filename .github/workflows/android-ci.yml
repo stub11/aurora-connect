@@ -21,11 +21,52 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: '8.11.1'
-      - run: gradle :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --no-daemon
+      - name: Decode public dev key
+        run: |
+          mkdir -p build
+          base64 -d android/dev-keystore.jks.b64 > build/aurora-dev.jks
+      - run: gradle :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease --no-daemon
+      - name: Verify APK certificate
+        run: |
+          set -euo pipefail
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          for apk in app/build/outputs/apk/{debug,release}/*.apk; do
+            "$signer" verify --print-certs "$apk" > cert.txt
+            actual=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' cert.txt)
+            test "$actual" = "$(cat android/dev-cert.sha256)"
+            printf 'Certificate SHA256: %s\n' "$actual" >> "$GITHUB_STEP_SUMMARY"
+          done
       - uses: actions/upload-artifact@v5
         with:
           name: aurora-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
       - name: Scan secrets
         run: docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.24.2 git /repo --redact
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: android
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: aurora-debug-apk
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export VERSION_NAME="0.1.0-${GITHUB_SHA:0:8}"
+          export APK="aurora-connect-$VERSION_NAME.apk"
+          mv app-release.apk "$APK"
+          sha256sum "$APK" > SHA256
+          python - <<'PY'
+          import os, json, hashlib, datetime
+          p=os.environ['APK']
+          with open(p,'rb') as f: digest=hashlib.file_digest(f,'sha256').hexdigest()
+          with open('update.json','w') as f:
+              json.dump(dict(versionCode=int(os.environ['GITHUB_RUN_NUMBER']),versionName=os.environ['VERSION_NAME'],file=p,sha256=digest,size=os.path.getsize(p),date=datetime.datetime.now(datetime.timezone.utc).isoformat(),notes='Тестовая сборка Aurora Connect'),f,ensure_ascii=False)
+          PY
+          gh release create "dev-$GITHUB_RUN_NUMBER" "$APK" SHA256 update.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Dev $VERSION_NAME" --notes "Тестовая сборка. Не импортируйте реальный конфиг."
