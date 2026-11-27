@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
      }
      else -> {
       Text("Диагностика")
+      DevUpdatePanel()
       Text("Связность, внешний IP, DNS, IPv6: не проверено")
       Text("RX: ${snapshot.rx}; TX: ${snapshot.tx}")
       Button(onClick = { clipboard.setPrimaryClip(ClipData.newPlainText("Aurora report", "VPN up: ${snapshot.up}; RX: ${snapshot.rx}; TX: ${snapshot.tx}; connectivity: unverified; $error")) }) { Text("Скопировать отчёт") }
