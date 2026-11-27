@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.InetAddresses
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Process
 import android.os.SystemClock
 import java.net.Proxy
@@ -25,6 +26,9 @@ internal fun parseProbeUri(text: String): URI {
 internal class ProbeRejected(val notice: String) : Exception(notice)
 
 internal fun checkVpnEndpoint(context: Context, text: String): ConnectivityEvidence {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        throw ProbeRejected("Проверка доступна на Android 11 и новее")
+    }
     val uri = try {
         parseProbeUri(text)
     } catch (_: Exception) {
@@ -43,6 +47,7 @@ internal fun checkVpnEndpoint(context: Context, text: String): ConnectivityEvide
         val capabilities = manager.getNetworkCapabilities(network) ?: return false
         return manager.activeNetwork == network &&
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             capabilities.ownerUid == Process.myUid()
     }
     if (!currentVpn(vpn)) throw ProbeRejected("Активная VPN-сеть Aurora Connect недоступна")
